@@ -1,0 +1,392 @@
+================================================================================
+                        PRODUCT REQUIREMENTS DOCUMENT (PRD)
+                        APLIKASI MOBILE "GUDANG CAHAYA"
+================================================================================
+
+Nama Produk     : Gudang Cahaya (Mobile App)
+Versi           : 1.0
+Platform        : Android (Flutter)
+Tipe Dokumen    : Product Requirements Document (PRD)
+Status          : Draft -> Final
+Konteks         : Penilaian Ulangan Harian (UH) - Penugasan Terstruktur
+                  Pembuatan Aplikasi Mobile Flutter
+Backend         : REST API Node.js + Drizzle ORM (repo Gudang-Cahaya)
+Tanggal         : 6 November 2026
+
+================================================================================
+1. LATAR BELAKANG & TUJUAN
+================================================================================
+
+1.1 Latar Belakang
+------------------
+Siswa diberikan penugasan terstruktur untuk membuat aplikasi mobile menggunakan
+Flutter dengan tema bebas. Aplikasi wajib memiliki fitur autentikasi token dan
+pengelolaan data (CRUD) yang terhubung ke REST API. Sebagai kelanjutan dari
+proyek Koke 2 (Pemrograman Web Dasar) yang telah membuat backend "Gudang
+Cahaya", maka dibuatlah versi mobile-nya sebagai client.
+
+1.2 Tujuan Produk
+-----------------
+1. Menyediakan aplikasi mobile untuk mengelola data produk gudang (inventaris).
+2. Menerapkan autentikasi berbasis token (login/register/logout).
+3. Menerapkan operasi CRUD lengkap (Create, Read, Update, Delete) via REST API.
+4. Memenuhi seluruh ketentuan penilaian UH mata pelajaran pemrograman mobile.
+
+1.3 Non-Goals (Di Luar Scope)
+-----------------------------
+- Fitur upload gambar produk (opsional, ditunda ke versi berikutnya).
+- Fitur multi-role (admin/kasir) - hanya single user.
+- Fitur laporan/analitik penjualan.
+- Push notification.
+- Mode offline (semua data butuh koneksi ke API).
+
+================================================================================
+2. TARGET PENGGUNA
+================================================================================
+
++----------------------+-------------------------------+---------------------+
+| Persona              | Deskripsi                     | Kebutuhan Utama     |
++----------------------+-------------------------------+---------------------+
+| Pemilik/Pengelola    | Mengelola stok produk toko    | Lihat, tambah, edit,|
+| Gudang               |                               | hapus produk cepat  |
+|                      |                               | dari HP             |
++----------------------+-------------------------------+---------------------+
+| Siswa (Demonstrator) | Menjalankan demo UH           | Alur jelas, error   |
+|                      |                               | handling baik, mudah|
+|                      |                               | dijelaskan          |
++----------------------+-------------------------------+---------------------+
+
+================================================================================
+3. RUANG LINGKUP FITUR
+================================================================================
+
+3.1 Fitur Wajib (Must Have - sesuai ketentuan UH)
+-------------------------------------------------
+[F-01] Login
+       Form email + password, kirim ke API, simpan token, redirect ke home.
+
+[F-02] Register
+       Form username + email + password, kirim ke API, tampilkan hasil.
+
+[F-03] Logout
+       Hapus token dari shared_preferences, redirect ke login.
+
+[F-04] Read Produk
+       Tampilkan daftar produk dari API (ListView).
+
+[F-05] Create Produk
+       Form tambah produk (nama, kategori, harga, stok, deskripsi).
+
+[F-06] Update Produk
+       Form edit produk (pre-fill data lama).
+
+[F-07] Delete Produk
+       Hapus produk dengan dialog konfirmasi.
+
+[F-08] Validasi Input
+       Semua form wajib validasi field tidak kosong + format email +
+       min password.
+
+[F-09] Loading & Error State
+       Indikator loading saat request, SnackBar saat error.
+
+3.2 Fitur Opsional (Nice to Have)
+----------------------------------
+[F-10] Upload gambar produk (via image_picker + multipart ke API).
+[F-11] Search produk (filter by nama di list).
+[F-12] Filter by kategori (dropdown filter).
+
+================================================================================
+4. USER FLOW
+================================================================================
+
+4.1 Alur Utama
+--------------
+[Splash/Login]
+    |
+    +-- Login berhasil --> [Product List]
+    |                         |
+    |                         +-- FAB (+) --> [Product Form: Create] --> List
+    |                         +-- Tap Edit  --> [Product Form: Update] --> List
+    |                         +-- Tap Hapus --> Dialog Konfirmasi --> List refresh
+    |                         +-- Logout    --> [Login]
+    |
+    +-- "Belum punya akun?" --> [Register] --> kembali ke Login
+
+4.2 Detail Alur Login
+---------------------
+1. User buka app -> LoginScreen tampil.
+2. Input email + password (validasi kosong/format).
+3. Tap Login -> loading indicator muncul.
+4. Sukses (200) -> token disimpan di shared_preferences ->
+   Navigator.pushReplacement ke ProductListScreen.
+5. Gagal -> SnackBar tampil pesan error dari API.
+6. Tap Register -> navigasi ke RegisterScreen.
+
+4.3 Detail Alur CRUD Produk
+---------------------------
+1. ProductListScreen load data via GET /products (FutureBuilder).
+2. Pull-to-refresh untuk reload.
+3. Tap FAB + -> ProductFormScreen mode create.
+4. Tap item menu Edit -> ProductFormScreen mode update (pre-filled).
+5. Tap menu Hapus -> AlertDialog konfirmasi -> DELETE /products/:id ->
+   refresh list.
+6. Semua request menyertakan header Authorization: Bearer <token>.
+
+================================================================================
+5. SPESIFIKASI TEKNIS
+================================================================================
+
+5.1 Arsitektur
+--------------
+- Pattern       : Simple layered architecture (UI -> Service -> API)
+- State Mgmt    : setState + FutureBuilder (tanpa provider/bloc)
+
+Struktur Folder:
+  lib/
+  +-- main.dart
+  +-- models/       -> UserModel, ProductModel
+  +-- services/     -> ApiService (http + shared_preferences)
+  +-- screens/      -> Login, Register, ProductList, ProductForm
+  +-- widgets/      -> ProductCard
+
+5.2 Dependencies
+----------------
++----------------------+---------+-------------------------------------+
+| Package              | Versi   | Fungsi                              |
++----------------------+---------+-------------------------------------+
+| http                 | ^1.2.0  | Request ke REST API                 |
+| shared_preferences   | ^2.2.2  | Simpan token lokal                  |
++----------------------+---------+-------------------------------------+
+
+5.3 Endpoint API yang Digunakan
+-------------------------------
++--------+------------------------+------+------------------+-----------+
+| Method | Endpoint               | Auth | Request Body     | Response  |
++--------+------------------------+------+------------------+-----------+
+| POST   | /api/auth/register     | NO   | username, email, | {message} |
+|        |                        |      | password         |           |
+| POST   | /api/auth/login        | NO   | email, password  | {token,   |
+|        |                        |      |                  |  user}    |
+| GET    | /api/products          | YES  | -                | [{id,     |
+|        |                        |      |                  |  name,    |
+|        |                        |      |                  |  ...}]    |
+| POST   | /api/products          | YES  | name, category,  | {message} |
+|        |                        |      | price, stock,    |           |
+|        |                        |      | description,     |           |
+|        |                        |      | imageUrl,        |           |
+|        |                        |      | imagePublicId    |           |
+| PUT    | /api/products/:id      | YES  | sama dengan POST | {message} |
+| DELETE | /api/products/:id      | YES  | -                | {message} |
++--------+------------------------+------+------------------+-----------+
+
+CATATAN: Endpoint PUT dan DELETE perlu dipastikan ada di backend.
+         Jika belum, backend perlu ditambah.
+
+5.4 Konfigurasi Base URL
+------------------------
++----------------------+----------------------------------------+
+| Environment          | Base URL                               |
++----------------------+----------------------------------------+
+| Android Emulator     | http://10.0.2.2:3000/api               |
+| HP Fisik (LAN)       | http://<IP-LAN-PC>:3000/api            |
++----------------------+----------------------------------------+
+
+5.5 Penyimpanan Token
+---------------------
+- Key    : "token" di shared_preferences
+- Hilang : saat logout (prefs.remove("token"))
+
+5.6 Skema Data Model
+--------------------
+UserModel:
+  - id       : int
+  - username : String
+  - email    : String
+
+ProductModel:
+  - id          : int
+  - name        : String
+  - category    : String
+  - price       : double
+  - stock       : int
+  - description : String
+  - imageUrl    : String
+
+================================================================================
+6. REQUIREMENT UI/UX
+================================================================================
+
+6.1 Prinsip Desain
+------------------
+- Material 3, seed color orange (identik dengan tema "cahaya").
+- Layout sederhana: Scaffold + AppBar + ListView/Column.
+- Konsisten: semua form pakai OutlineInputBorder, tombol full-width
+  height 50.
+
+6.2 Spesifikasi Layar
+---------------------
++----------------+------------------------------------+------------------+
+| Layar          | Komponen Utama                     | State            |
++----------------+------------------------------------+------------------+
+| Login          | Icon, judul, 2 TextFormField,      | loading, error   |
+|                | tombol Login, link Register        |                  |
+| Register       | 3 TextFormField, tombol Daftar     | loading, error,  |
+|                |                                    | success          |
+| Product List   | AppBar (+logout), FutureBuilder,   | loading, empty,  |
+|                | ListView of ProductCard, FAB +,    | error            |
+|                | pull-to-refresh                    |                  |
+| Product Form   | 5 TextFormField, tombol Simpan     | loading, error   |
++----------------+------------------------------------+------------------+
+
+6.3 Validasi Form
+-----------------
++----------------+-------------------------------------------------+
+| Field          | Aturan                                          |
++----------------+-------------------------------------------------+
+| Email          | Wajib, harus mengandung "@"                     |
+| Password       | Wajib, min 6 karakter                           |
+| Username       | Wajib, min 3 karakter                           |
+| Nama Produk    | Wajib                                           |
+| Kategori       | Wajib                                           |
+| Harga          | Wajib, angka, > 0                               |
+| Stok           | Wajib, angka, >= 0                              |
+| Deskripsi      | Wajib                                           |
++----------------+-------------------------------------------------+
+
+================================================================================
+7. REQUIREMENT NON-FUNGSIONAL
+================================================================================
+
++-----------------+-----------------------------------------------------+
+| Aspek           | Requirement                                         |
++-----------------+-----------------------------------------------------+
+| Kompatibilitas  | Android 8.0+ (API level 26+)                        |
+| Responsivitas   | Tampil baik di layar 5" - 6.7"                      |
+| Error Handling  | Semua request dibungkus try-catch, error tampil     |
+|                 | via SnackBar                                        |
+| Loading         | Indikator muncul saat request, tombol disabled      |
+| Keamanan        | Token disimpan di shared_preferences (bukan        |
+|                 | plaintext di source); header Bearer wajib di       |
+|                 | request terproteksi                                 |
+| Performa        | List produk < 100 item, load < 3 detik di jaringan  |
+|                 | lokal                                               |
+| Kerapian Kode   | Struktur folder konsisten, penamaan camelCase,      |
+|                 | komentar minimal                                    |
++-----------------+-----------------------------------------------------+
+
+================================================================================
+8. KRITERIA PENERIMAAN (ACCEPTANCE CRITERIA)
+================================================================================
+
+[AC-01] Login
+        User bisa login dengan akun valid -> masuk ke Product List;
+        akun salah -> muncul pesan error.
+
+[AC-02] Register
+        User baru bisa daftar -> data masuk ke DB -> bisa login.
+
+[AC-03] Logout
+        Token terhapus, kembali ke Login, tidak bisa akses Product List
+        tanpa login ulang.
+
+[AC-04] Read
+        List produk tampil sesuai data di DB.
+
+[AC-05] Create
+        Produk baru muncul di list setelah disimpan.
+
+[AC-06] Update
+        Perubahan data produk langsung terlihat di list.
+
+[AC-07] Delete
+        Produk hilang dari list setelah konfirmasi.
+
+[AC-08] Validasi
+        Submit form kosong -> muncul pesan validasi per field.
+
+[AC-09] Loading
+        Muncul spinner saat request berlangsung.
+
+[AC-10] Error
+        Backend mati -> muncul pesan error yang jelas.
+
+================================================================================
+9. TIMELINE & MILESTONE
+================================================================================
+
++------+---------------------------------------------+--------------+
+| Fase | Aktivitas                                   | Estimasi     |
++------+---------------------------------------------+--------------+
+| 1    | Setup project Flutter + dependencies        | 0.5 hari     |
+| 2    | Model + ApiService (auth)                   | 0.5 hari     |
+| 3    | Login + Register screen + validasi          | 1 hari       |
+| 4    | Product List + Card                         | 0.5 hari     |
+| 5    | Product Form (Create)                       | 0.5 hari     |
+| 6    | Product Form (Update) + Delete              | 0.5 hari     |
+| 7    | Testing end-to-end + fix bug                | 1 hari       |
+| 8    | Persiapan demo UH                           | 0.5 hari     |
++------+---------------------------------------------+--------------+
+|      | TOTAL                                       | ~5 hari      |
++------+---------------------------------------------+--------------+
+
+================================================================================
+10. RISIKO & MITIGASI
+================================================================================
+
++---------------------------+--------------+-------------------------------+
+| Risiko                    | Dampak       | Mitigasi                      |
++---------------------------+--------------+-------------------------------+
+| Endpoint PUT/DELETE belum | CRUD tidak   | Tambahkan endpoint di Node.js |
+| ada di backend            | lengkap      | sebelum demo                  |
+| Base URL salah (emulator  | App tidak    | Test pakai Postman dulu,      |
+| vs HP)                    | connect      | dokumentasikan IP LAN         |
+| Token expired/format beda | Request 401  | Cek format response login di  |
+|                           |              | Postman, sesuaikan parsing    |
+| Lupa logout di demo       | Token        | Sediakan tombol logout jelas  |
+|                           | nyangkut     | di AppBar                     |
++---------------------------+--------------+-------------------------------+
+
+================================================================================
+11. OUT OF SCOPE (VERSI 1.0)
+================================================================================
+
+- Upload gambar produk (via image_picker + multipart)
+- Search & filter produk
+- Multi-user role
+- Laporan/analitik
+- Mode offline
+- iOS build (fokus Android)
+
+================================================================================
+12. LAMPIRAN
+================================================================================
+
+12.1 Referensi
+--------------
+- Repo backend  : https://github.com/kevinefendy/Gudang-Cahaya
+- Dokumen tugas : PENUGASAN TERSTRUKTUR.txt
+
+12.2 Definisi Istilah
+---------------------
++-------------+------------------------------------------------------+
+| Istilah     | Arti                                                 |
++-------------+------------------------------------------------------+
+| CRUD        | Create, Read, Update, Delete                         |
+| REST API    | Arsitektur API berbasis HTTP                         |
+| Token       | String autentikasi dari server, disimpan lokal       |
+| Bearer      | Skema header "Authorization: Bearer <token>"         |
++-------------+------------------------------------------------------+
+
+================================================================================
+DISETUJUI OLEH:
+================================================================================
+
+Nama    : ______________________________
+Jabatan : ______________________________
+Tanggal : ______________________________
+Tanda   : ______________________________
+
+================================================================================
+                                END OF DOCUMENT
+================================================================================
